@@ -23,7 +23,12 @@ make release
 
 ## Usage
 
-This pak runs on port 7070.
+> [!NOTE]
+> The default credentials are:
+>
+> - `minui:minui`
+
+This pak runs on port 8384.
 
 ### daemon-mode
 
