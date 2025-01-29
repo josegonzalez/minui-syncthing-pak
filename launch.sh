@@ -26,7 +26,7 @@ service_on() {
     if [ ! -f "$progdir/config/config.xml" ]; then
         show_message "Generating configuration for $HUMAN_READABLE_NAME" forever
         mkdir -p "$progdir/config"
-        "$progdir/bin/$SERVICE_NAME" generate --no-default-folder "--home=$progdir/config/" >"$progdir/logs/generate.log" 2>&1 &
+        "$progdir/bin/$SERVICE_NAME" generate --no-default-folder "--home=$progdir/config/" >"$progdir/log/generate.log" 2>&1 &
         max_counter="30"
         counter=0
 
