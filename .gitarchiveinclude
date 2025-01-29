@@ -1,0 +1,5 @@
+bin/evtest
+bin/sdl2imgshow
+bin/syncthing-arm
+bin/syncthing-arm64
+res/fonts/BPreplayBold.otf
