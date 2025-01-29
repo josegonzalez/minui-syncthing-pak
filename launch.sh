@@ -39,7 +39,9 @@ service_on() {
         done
     fi
 
-    show_message "Starting $HUMAN_READABLE_NAME" forever
+    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$progdir/config/config.xml"
+
+    show_message "Running $HUMAN_READABLE_NAME" forever
     ("$progdir/bin/$SERVICE_NAME" serve "--home=$progdir/config/" >"$progdir/log/service.log" &) &
 }
 
