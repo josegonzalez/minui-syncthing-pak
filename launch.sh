@@ -29,14 +29,17 @@ service_on() {
         "$progdir/bin/$SERVICE_NAME" generate --no-default-folder "--home=$progdir/config/" >"$progdir/log/generate.log" 2>&1 &
         max_counter="30"
         counter=0
+        sleep 10
 
-        while ! is_service_running; do
-            counter=$((counter + 1))
-            if [ "$counter" -gt "$max_counter" ]; then
-                return 1
+        while true; do
+            if [ -f "$progdir/config/config.xml" ]; then
+                break
             fi
+
             sleep 1
         done
+
+        killall "$SERVICE_NAME"
     fi
 
     sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$progdir/config/config.xml"
