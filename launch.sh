@@ -2,10 +2,9 @@
 echo "$0" "$@"
 progdir="$(dirname "$0")"
 cd "$progdir" || exit 1
+PAK_NAME="$(basename "$progdir")"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$progdir/lib"
 echo 1 >/tmp/stay_awake
-trap "rm -f /tmp/stay_awake" EXIT INT TERM HUP QUIT
-BUTTON_LOG="$progdir/log/buttons.log"
 
 if uname -m | grep -q '64'; then
     SERVICE_NAME="syncthing-arm64"
@@ -13,38 +12,15 @@ else
     SERVICE_NAME="syncthing-arm"
 fi
 HUMAN_READABLE_NAME="Syncthing"
-ONLY_LAUNCH_THEN_EXIT=0
 LAUNCHES_SCRIPT="false"
-service_on() {
-    cd "$SDCARD_PATH" || exit 1
-    if [ -f "$progdir/log/service.log" ]; then
-        mv "$progdir/log/service.log" "$progdir/log/service.log.old"
-    fi
-
-    chmod +x "$progdir/bin/$SERVICE_NAME"
-
-    if [ ! -f "$progdir/config/config.xml" ]; then
-        show_message "Generating configuration for $HUMAN_READABLE_NAME" forever
-        mkdir -p "$progdir/config"
-        "$progdir/bin/$SERVICE_NAME" generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$progdir/config/" >"$progdir/log/generate.log" 2>&1 &
-        max_counter="30"
-        counter=0
-
-        while is_service_running; do
-            sleep 1
-        done
-
-        killall "$SERVICE_NAME"
-    fi
-
-    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$progdir/config/config.xml"
-
-    show_message "Running $HUMAN_READABLE_NAME" forever
-    ("$progdir/bin/$SERVICE_NAME" serve "--home=$progdir/config/" >"$progdir/log/service.log" &) &
-}
 
 service_off() {
     killall "$SERVICE_NAME"
+}
+
+cleanup() {
+    rm -f /tmp/stay_awake
+    killall sdl2imgshow >/dev/null 2>&1 || true
 }
 
 show_message() {
@@ -55,7 +31,7 @@ show_message() {
         seconds="forever"
     fi
 
-    killall sdl2imgshow
+    killall sdl2imgshow >/dev/null 2>&1 || true
     echo "$message"
     if [ "$seconds" = "forever" ]; then
         "$progdir/bin/sdl2imgshow" \
@@ -64,7 +40,7 @@ show_message() {
             -s 27 \
             -c "220,220,220" \
             -q \
-            -t "$message" &
+            -t "$message" >/dev/null 2>&1 &
     else
         "$progdir/bin/sdl2imgshow" \
             -i "$progdir/res/background.png" \
@@ -72,74 +48,32 @@ show_message() {
             -s 27 \
             -c "220,220,220" \
             -q \
-            -t "$message"
+            -t "$message" >/dev/null 2>&1
         sleep "$seconds"
     fi
 }
 
-monitor_buttons() {
-    if [ -f "$BUTTON_LOG" ]; then
-        mv "$BUTTON_LOG" "$BUTTON_LOG.old"
-    fi
-    touch "$BUTTON_LOG"
-
-    chmod +x "$progdir/bin/evtest"
-    for dev in /dev/input/event*; do
-        [ -e "$dev" ] || continue
-        "$progdir/bin/evtest" "$dev" 2>&1 | while read -r line; do
-            if echo "$line" | grep -q "code 17 (ABS_HAT0Y).*value -1"; then
-                echo "D_PAD_UP detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 17 (ABS_HAT0Y).*value 1"; then
-                echo "D_PAD_DOWN detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 16 (ABS_HAT0X).*value 1"; then
-                echo "D_PAD_RIGHT detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 16 (ABS_HAT0X).*value -1"; then
-                echo "D_PAD_LEFT detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 308 (BTN_WEST).*value 1"; then
-                echo "BUTTON_X detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 305 (BTN_EAST).*value 1"; then
-                echo "BUTTON_A detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 304 (BTN_SOUTH).*value 1"; then
-                echo "BUTTON_B detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 307 (BTN_NORTH).*value 1"; then
-                echo "BUTTON_Y detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 317 (BTN_THUMBL).*value 1"; then
-                echo "HOTKEY_1 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 318 (BTN_THUMBR).*value 1"; then
-                echo "HOTKEY_2 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 310 (BTN_TL).*value 1"; then
-                echo "L1 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 311 (BTN_TR).*value 1"; then
-                echo "R1 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 2 (ABS_Z).*value 255"; then
-                echo "L2 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 5 (ABS_RZ).*value 255"; then
-                echo "R2 detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 316 (BTN_MODE).*value 1"; then
-                echo "MENU detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 314 (BTN_SELECT).*value 1"; then
-                echo "SELECT detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 315 (BTN_START).*value 1"; then
-                echo "START detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 115 (KEY_VOLUMEUP).*value 1"; then
-                echo "VOLUME_UP detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 114 (KEY_VOLUMEDOWN).*value 1"; then
-                echo "VOLUME_DOWN detected" >>"$BUTTON_LOG"
-            elif echo "$line" | grep -q "code 116 (KEY_POWER).*value 1"; then
-                echo "POWER detected" >>"$BUTTON_LOG"
-            fi
-        done &
-    done
+disable_start_on_boot() {
+    sed -i "/${PAK_NAME}-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    return 0
 }
 
-wait_for_button() {
-    button="$1"
-    while true; do
-        if grep -q "$button" "$BUTTON_LOG"; then
-            break
-        fi
-        sleep 0.1
-    done
+enable_start_on_boot() {
+    if [ ! -f "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" ]; then
+        echo '#!/bin/sh' >"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+        echo '' >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    fi
+
+    echo "test -f \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME/bin/on-boot\" && \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME/bin/on-boot\" # ${PAK_NAME}-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    chmod +x "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    return 0
+}
+
+will_start_on_boot() {
+    if grep -q "${PAK_NAME}-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 is_service_running() {
@@ -169,69 +103,139 @@ wait_for_service() {
     done
 }
 
-main_daemonize() {
-    echo "Toggling $SERVICE_NAME..."
-    if is_service_running; then
-        show_message "Disabling the $HUMAN_READABLE_NAME" 2
-        service_off
-    else
-        show_message "Enabling the $HUMAN_READABLE_NAME" 2
-        service_on
+wait_for_service_to_stop() {
+    max_counter="$1"
+    counter=0
 
-        if ! wait_for_service 10; then
-            show_message "Failed to start $HUMAN_READABLE_NAME" 2
+    while is_service_running; do
+        counter=$((counter + 1))
+        if [ "$counter" -gt "$max_counter" ]; then
             return 1
         fi
-    fi
-
-    show_message "Done" 1
+        sleep 1
+    done
 }
 
-main_process() {
+main_screen() {
+    minui_list_file="/tmp/minui-list"
+    rm -f "$minui_list_file"
+    touch "$minui_list_file"
+
+    start_on_boot=false
+    if will_start_on_boot; then
+        start_on_boot=true
+    fi
+
+    echo "Enabled: false" >>"$minui_list_file"
+    echo "Start on boot: $start_on_boot" >>"$minui_list_file"
+    echo "Enable" >>"$minui_list_file"
+
     if is_service_running; then
-        show_message "Disabling the $HUMAN_READABLE_NAME" 2
-        service_off
+        service_pid="$(pgrep "$SERVICE_NAME" 2>/dev/null | sort | head -n 1 || true)"
+        echo "Enabled: true (pid: $service_pid)" >"$minui_list_file"
+        echo "Start on boot: $start_on_boot" >>"$minui_list_file"
+        echo "Disable" >>"$minui_list_file"
     fi
 
-    show_message "Starting $HUMAN_READABLE_NAME" 2
-    service_on
-    sleep 1
-
-    echo "Waiting for $HUMAN_READABLE_NAME to be running"
-    if ! wait_for_service 10; then
-        show_message "Failed to start $HUMAN_READABLE_NAME" 2
-        return 1
+    if [ "$start_on_boot" = "true" ]; then
+        echo "Disable start on boot" >>"$minui_list_file"
+    else
+        echo "Enable start on boot" >>"$minui_list_file"
     fi
 
-    show_message "Press B to exit"
-    monitor_buttons
-
-    wait_for_button "BUTTON_B"
-    show_message "Stopping $HUMAN_READABLE_NAME"
-    service_off
-    killall evtest
-    sync
-    sleep 1
-    show_message "Done" 1
+    killall sdl2imgshow >/dev/null 2>&1 || true
+    "$progdir/bin/minui-list-$PLATFORM" --file "$minui_list_file" --format text --header "$HUMAN_READABLE_NAME Configuration"
 }
 
 main() {
-    if [ "$ONLY_LAUNCH_THEN_EXIT" -eq 1 ]; then
-        service_on
-        return $?
+    trap "cleanup" EXIT INT TERM HUP QUIT
+
+    if [ "$PLATFORM" = "tg3040" ] && [ -z "$DEVICE" ]; then
+        export DEVICE="brick"
+        export PLATFORM="tg5040"
     fi
 
-    if [ -f "$progdir/daemon-mode" ]; then
-        main_daemonize
-    else
-        main_process
+    allowed_platforms="tg5040 rg35xxplus"
+    if ! echo "$allowed_platforms" | grep -q "$PLATFORM"; then
+        show_message "$PLATFORM is not a supported platform" 2
+        exit 1
     fi
-    killall sdl2imgshow
+
+    if [ ! -f "$progdir/bin/minui-keyboard-$PLATFORM" ]; then
+        show_message "$progdir/bin/minui-keyboard-$PLATFORM not found" 2
+        exit 1
+    fi
+    if [ ! -f "$progdir/bin/minui-list-$PLATFORM" ]; then
+        show_message "$progdir/bin/minui-list-$PLATFORM not found" 2
+        exit 1
+    fi
+
+    if ! cd "$progdir/bin"; then
+        show_message "Failed to cd to $progdir/bin" 2
+        exit 1
+    fi
+    chmod +x *
+    if ! cd "$progdir"; then
+        show_message "Failed to cd to $progdir" 2
+        exit 1
+    fi
+
+    if [ "$PLATFORM" = "rg35xxplus" ]; then
+        RGXX_MODEL="$(strings /mnt/vendor/bin/dmenu.bin | grep ^RG)"
+        if [ "$RGXX_MODEL" = "RG28xx" ]; then
+            show_message "Wifi not supported on RG28XX" 2
+            exit 1
+        fi
+    fi
+
+    while true; do
+        sync
+        selection="$(main_screen)"
+        exit_code=$?
+        # exit codes: 2 = back button, 3 = menu button
+        if [ "$exit_code" -ne 0 ]; then
+            break
+        fi
+
+        if echo "$selection" | grep -q "^Enable$"; then
+            show_message "Enabling $HUMAN_READABLE_NAME..." 1
+            if ! "$progdir/bin/service-on"; then
+                show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                continue
+            fi
+
+            show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
+            if ! wait_for_service 10; then
+                show_message "Failed to start $HUMAN_READABLE_NAME" 2
+            fi
+        elif echo "$selection" | grep -q "^Disable$"; then
+            show_message "Disabling $HUMAN_READABLE_NAME..." 1
+            if ! service_off; then
+                show_message "Failed to disable $HUMAN_READABLE_NAME!" 2
+            fi
+
+            show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
+            if ! wait_for_service_to_stop 10; then
+                show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+            fi
+        elif echo "$selection" | grep -q "^Enable start on boot$"; then
+            show_message "Enabling start on boot..." 1
+            if ! enable_start_on_boot; then
+                show_message "Failed to enable start on boot!" 2
+            fi
+        elif echo "$selection" | grep -q "^Disable start on boot$"; then
+            show_message "Disabling start on boot..." 1
+            if ! disable_start_on_boot; then
+                show_message "Failed to disable start on boot!" 2
+            fi
+        fi
+    done
+    sync
 }
 
-mkdir -p "$progdir/log"
-if [ -f "$progdir/log/launch.log" ]; then
-    mv "$progdir/log/launch.log" "$progdir/log/launch.log.old"
+mkdir -p "$LOGS_PATH"
+if [ -f "$LOGS_PATH/$PAK_NAME.txt" ]; then
+    mv "$LOGS_PATH/$PAK_NAME.txt" "$LOGS_PATH/$PAK_NAME.txt.old"
 fi
 
-main "$@" >"$progdir/log/launch.log" 2>&1
+main "$@" >"$LOGS_PATH/$PAK_NAME.txt" 2>&1
