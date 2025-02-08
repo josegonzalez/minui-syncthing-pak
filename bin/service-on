@@ -2,6 +2,7 @@
 bindir="$(dirname "$0")"
 progdir="$(dirname "$bindir")"
 cd "$progdir" || exit 1
+[ -f "$progdir/debug" ] && set -x
 PAK_NAME="$(basename "$progdir")"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$progdir/lib"
 
