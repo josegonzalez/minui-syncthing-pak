@@ -1,0 +1,57 @@
+#!/bin/sh
+bindir="$(dirname "$0")"
+progdir="$(dirname "$bindir")"
+cd "$progdir" || exit 1
+PAK_NAME="$(basename "$progdir")"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$progdir/lib"
+
+is_service_running() {
+    if uname -m | grep -q '64'; then
+        bin_name="syncthing-arm64"
+    else
+        bin_name="syncthing-arm"
+    fi
+
+    if pgrep "$bin_name" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+main() {
+    cd "$SDCARD_PATH" || exit 1
+    if [ -f "$LOGS_PATH/$PAK_NAME.service.txt" ]; then
+        mv "$LOGS_PATH/$PAK_NAME.service.txt" "$LOGS_PATH/$PAK_NAME.service.txt.old"
+    fi
+    if [ -f "$LOGS_PATH/$PAK_NAME.generate.txt" ]; then
+        mv "$LOGS_PATH/$PAK_NAME.generate.txt" "$LOGS_PATH/$PAK_NAME.generate.txt.old"
+    fi
+
+    if uname -m | grep -q '64'; then
+        bin_name="syncthing-arm64"
+    else
+        bin_name="syncthing-arm"
+    fi
+
+    chmod +x "$bindir/$bin_name"
+
+    if [ ! -f "$bindir/config/config.xml" ]; then
+        echo "Generating configuration for Syncthing"
+        mkdir -p "$progdir/config"
+        "$bindir/$bin_name" generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$progdir/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
+
+        while is_service_running; do
+            sleep 1
+        done
+
+        killall "$bin_name" >/dev/null 2>&1 || true
+    fi
+
+    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$progdir/config/config.xml"
+
+    echo "Running Syncthing"
+    ("$bindir/$bin_name" serve "--home=$progdir/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
+}
+
+main "$@"
