@@ -201,10 +201,6 @@ main() {
         return 1
     fi
 
-    if [ ! -f "$progdir/bin/minui-keyboard-$PLATFORM" ]; then
-        show_message "$progdir/bin/minui-keyboard-$PLATFORM not found" 2
-        return 1
-    fi
     if [ ! -f "$progdir/bin/minui-list-$PLATFORM" ]; then
         show_message "$progdir/bin/minui-list-$PLATFORM not found" 2
         return 1
