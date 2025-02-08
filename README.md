@@ -29,3 +29,7 @@ This pak runs on port 8384 (HTTP UI).
 The default credentials are:
 
 - `minui:minui`
+
+### Debug Logging
+
+To enable debug logging, create a file named `debug` in the pak folder. Logs will be written to the `$SDCARD_PATH/.userdata/$PLATFORM/logs/` folder.
