@@ -22,9 +22,10 @@ Use the correct platform for your device.
 
 ## Usage
 
-> [!NOTE]
-> The default credentials are:
->
-> - `minui:minui`
+Browse to `Tools > Syncthing` and press `A` to turn on the syncthing server.
 
-This pak runs on port 8384.
+This pak runs on port 8384 (HTTP UI).
+
+The default credentials are:
+
+- `minui:minui`
