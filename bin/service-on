@@ -48,7 +48,7 @@ main() {
         killall "$bin_name" >/dev/null 2>&1 || true
     fi
 
-    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$progdir/config/config.xml"
+    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$USERDATA_PATH/Syncthing/config/config.xml"
 
     echo "Running Syncthing"
     ("$bindir/$bin_name" serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
