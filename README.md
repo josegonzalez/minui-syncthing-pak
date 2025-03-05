@@ -2,6 +2,11 @@
 
 A MinUI app wrapping [`syncthing`](https://syncthing.net/), a continuous file synchronization program.
 
+> [!NOTE]
+> This pak does not rename files on disk before or after syncing, and cannot be used
+> as a compatibility layer between MinUI and Retroarch-compatible handhelds. Files
+> are synced as written to disk by other tools.
+
 ## Requirements
 
 This pak is designed and tested on the following MinUI Platforms and devices:
