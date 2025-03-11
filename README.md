@@ -37,4 +37,4 @@ The default credentials are:
 
 ### Debug Logging
 
-To enable debug logging, create a file named `debug` in the pak folder. Logs will be written to the `$SDCARD_PATH/.userdata/$PLATFORM/logs/` folder.
+To enable debug logging, create a file named `debug` in the `$SDCARD_PATH/.userdata/$PLATFORM/Syncthing` folder. Logs will be written to the `$SDCARD_PATH/.userdata/$PLATFORM/logs/` folder.
