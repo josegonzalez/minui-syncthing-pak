@@ -4,5 +4,5 @@ bin/*
 res/fonts/*
 !res/fonts/.gitkeep
 
-!bin/on-boot
 !bin/service-on
+!bin/on-boot

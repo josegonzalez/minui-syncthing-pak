@@ -1,5 +1,21 @@
 {
     "label": "Syncthing",
     "launch": "launch.sh",
-    "description": "Manages Syncthing"
+    "description": "Manages Syncthing",
+    "platforms": [
+        "rg35xxplus",
+        "tg5040"
+    ],
+    "settings": [
+        {
+            "name": "Enable",
+            "options": ["false", "true"],
+            "selected": 0
+        },
+        {
+            "name": "Start on boot",
+            "options": ["false", "true"],
+            "selected": 0
+        }
+    ]
 }
