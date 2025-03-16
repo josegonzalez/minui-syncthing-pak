@@ -1,19 +1,22 @@
 #!/bin/sh
-bindir="$(dirname "$0")"
-progdir="$(dirname "$bindir")"
-cd "$progdir" || exit 1
-[ -f "$USERDATA_PATH/Syncthing/debug" ] && set -x
-PAK_NAME="$(basename "$progdir")"
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$progdir/lib"
+BIN_DIR="$(dirname "$0")"
+PAK_DIR="$(dirname "$BIN_DIR")"
+PAK_NAME="$(basename "$PAK_DIR")"
+PAK_NAME="${PAK_NAME%.*}"
+[ -f "$USERDATA_PATH/$PAK_NAME/debug" ] && set -x
+
+echo "$0" "$@"
+cd "$PAK_DIR" || exit 1
+
+architecture=arm
+if uname -m | grep -q '64'; then
+    architecture=arm64
+fi
+
+export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 
 is_service_running() {
-    if uname -m | grep -q '64'; then
-        bin_name="syncthing-arm64"
-    else
-        bin_name="syncthing-arm"
-    fi
-
-    if pgrep "$bin_name" >/dev/null 2>&1; then
+    if pgrep syncthing >/dev/null 2>&1; then
         return 0
     fi
 
@@ -23,35 +26,29 @@ is_service_running() {
 main() {
     cd "$SDCARD_PATH" || return 1
 
-    if uname -m | grep -q '64'; then
-        bin_name="syncthing-arm64"
-    else
-        bin_name="syncthing-arm"
-    fi
+    chmod +x "$PAK_DIR/bin/$architecture/syncthing"
 
-    chmod +x "$bindir/$bin_name"
-
-    if [ -d "$progdir/config" ]; then
+    if [ -d "$PAK_DIR/config" ]; then
         mkdir -p "$USERDATA_PATH/Syncthing"
-        mv "$progdir/config" "$USERDATA_PATH/Syncthing/config"
+        mv "$PAK_DIR/config" "$USERDATA_PATH/Syncthing/config"
     fi
 
     if [ ! -f "$USERDATA_PATH/Syncthing/config/config.xml" ]; then
         echo "Generating configuration for Syncthing"
         mkdir -p "$USERDATA_PATH/Syncthing/config"
-        "$bindir/$bin_name" generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
+        syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
 
         while is_service_running; do
             sleep 1
         done
 
-        killall "$bin_name" >/dev/null 2>&1 || true
+        killall syncthing >/dev/null 2>&1 || true
     fi
 
     sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$USERDATA_PATH/Syncthing/config/config.xml"
 
     echo "Running Syncthing"
-    ("$bindir/$bin_name" serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
+    (syncthing serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
 }
 
 main "$@"

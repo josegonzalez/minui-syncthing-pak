@@ -1,28 +1,34 @@
 #!/bin/sh
-echo "$0" "$@"
-progdir="$(dirname "$0")"
-cd "$progdir" || exit 1
-[ -f "$USERDATA_PATH/Syncthing/debug" ] && set -x
-PAK_NAME="$(basename "$progdir")"
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$progdir/lib"
-echo 1 >/tmp/stay_awake
+PAK_DIR="$(dirname "$0")"
+PAK_NAME="$(basename "$PAK_DIR")"
+PAK_NAME="${PAK_NAME%.*}"
+[ -f "$USERDATA_PATH/$PAK_NAME/debug" ] && set -x
 
+rm -f "$LOGS_PATH/$PAK_NAME.txt"
+exec >>"$LOGS_PATH/$PAK_NAME.txt"
+exec 2>&1
+
+echo "$0" "$@"
+cd "$PAK_DIR" || exit 1
+mkdir -p "$USERDATA_PATH/$PAK_NAME"
+
+architecture=arm
 if uname -m | grep -q '64'; then
-    SERVICE_NAME="syncthing-arm64"
-else
-    SERVICE_NAME="syncthing-arm"
+    architecture=arm64
 fi
+
+export HOME="$USERDATA_PATH/$PAK_NAME"
+export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
+export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
+
+SERVICE_NAME="syncthing"
 HUMAN_READABLE_NAME="Syncthing"
 LAUNCHES_SCRIPT="false"
 NETWORK_PORT=8384
 NETWORK_SCHEME="http"
+
 service_off() {
     killall "$SERVICE_NAME"
-}
-
-cleanup() {
-    rm -f /tmp/stay_awake
-    killall sdl2imgshow >/dev/null 2>&1 || true
 }
 
 show_message() {
@@ -33,30 +39,18 @@ show_message() {
         seconds="forever"
     fi
 
-    killall sdl2imgshow >/dev/null 2>&1 || true
-    echo "$message"
+    killall minui-presenter >/dev/null 2>&1 || true
+    echo "$message" 1>&2
     if [ "$seconds" = "forever" ]; then
-        "$progdir/bin/sdl2imgshow" \
-            -i "$progdir/res/background.png" \
-            -f "$progdir/res/fonts/BPreplayBold.otf" \
-            -s 27 \
-            -c "220,220,220" \
-            -q \
-            -t "$message" >/dev/null 2>&1 &
+        minui-presenter --message "$message" --timeout -1 &
     else
-        "$progdir/bin/sdl2imgshow" \
-            -i "$progdir/res/background.png" \
-            -f "$progdir/res/fonts/BPreplayBold.otf" \
-            -s 27 \
-            -c "220,220,220" \
-            -q \
-            -t "$message" >/dev/null 2>&1
-        sleep "$seconds"
+        minui-presenter --message "$message" --timeout "$seconds"
     fi
 }
 
 disable_start_on_boot() {
-    sed -i "/${PAK_NAME}-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    sed -i "/${PAK_NAME}.pak-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    sync
     return 0
 }
 
@@ -66,13 +60,14 @@ enable_start_on_boot() {
         echo '' >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     fi
 
-    echo "test -f \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME/bin/on-boot\" && \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME/bin/on-boot\" # ${PAK_NAME}-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    echo "test -f \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" && \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" # ${PAK_NAME}.pak-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     chmod +x "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    sync
     return 0
 }
 
 will_start_on_boot() {
-    if grep -q "${PAK_NAME}-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
+    if grep -q "${PAK_NAME}.pak-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -118,6 +113,14 @@ wait_for_service_to_stop() {
     done
 }
 
+get_service_pid() {
+    if [ "$LAUNCHES_SCRIPT" = "true" ]; then
+        pgrep -fn "$SERVICE_NAME" 2>/dev/null | sort | head -n 1 || true
+    else
+        pgrep "$SERVICE_NAME" 2>/dev/null | sort | head -n 1 || true
+    fi
+}
+
 get_ip_address() {
     if [ -z "$NETWORK_PORT" ]; then
         return
@@ -152,42 +155,57 @@ get_ip_address() {
     echo "$NETWORK_SCHEME://$ip_address:$NETWORK_PORT"
 }
 
-main_screen() {
-    minui_list_file="/tmp/minui-list"
+current_settings() {
+    minui_list_file="/tmp/${PAK_NAME}-settings.json"
     rm -f "$minui_list_file"
-    touch "$minui_list_file"
 
-    start_on_boot=false
-    if will_start_on_boot; then
-        start_on_boot=true
+    jq -rM '{settings: .settings}' "$PAK_DIR/config.json" >"$minui_list_file"
+    if is_service_running; then
+        jq '.settings[0].selected = 1' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
     fi
 
-    echo "Enabled: false" >>"$minui_list_file"
-    echo "Start on boot: $start_on_boot" >>"$minui_list_file"
-    echo "Enable" >>"$minui_list_file"
+    if will_start_on_boot; then
+        jq '.settings[1].selected = 1' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+    fi
+
+    cat "$minui_list_file"
+}
+
+main_screen() {
+    settings="$1"
+    minui_list_file="/tmp/${PAK_NAME}-minui-list.json"
+    rm -f "$minui_list_file"
+
+    echo "$settings" >"$minui_list_file"
 
     if is_service_running; then
-        service_pid="$(pgrep "$SERVICE_NAME" 2>/dev/null | sort | head -n 1 || true)"
+        service_pid="$(get_service_pid)"
+        jq --arg pid "$service_pid" '.settings[.settings | length] |= . + {"name": "PID", "options": [$pid], "selected": 0, "features": {"unselectable": true}}' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+
         ip_address="$(get_ip_address)"
-        echo "Enabled: true (pid: $service_pid)" >"$minui_list_file"
-        echo "Start on boot: $start_on_boot" >>"$minui_list_file"
         if [ -n "$ip_address" ]; then
-            echo "Address: $ip_address" >>"$minui_list_file"
+            jq --arg ip "$ip_address" '.settings[.settings | length] |= . + {"name": "Address", "options": [$ip], "selected": 0, "features": {"unselectable": true}}' "$minui_list_file" >"$minui_list_file.tmp"
+            mv "$minui_list_file.tmp" "$minui_list_file"
         fi
-        echo "Disable" >>"$minui_list_file"
     fi
 
-    if [ "$start_on_boot" = "true" ]; then
-        echo "Disable start on boot" >>"$minui_list_file"
-    else
-        echo "Enable start on boot" >>"$minui_list_file"
-    fi
+    minui-list --file "$minui_list_file" --format json --header "$HUMAN_READABLE_NAME" --confirm-text "SAVE" --item-key "settings" --stdout-value state
+}
 
-    killall sdl2imgshow >/dev/null 2>&1 || true
-    "$progdir/bin/minui-list-$PLATFORM" --file "$minui_list_file" --format text --header "$HUMAN_READABLE_NAME"
+cleanup() {
+    rm -f "/tmp/${PAK_NAME}-old-settings.json"
+    rm -f "/tmp/${PAK_NAME}-new-settings.json"
+    rm -f "/tmp/${PAK_NAME}-settings.json"
+    rm -f "/tmp/${PAK_NAME}-minui-list.json"
+    rm -f /tmp/stay_awake
+    killall minui-presenter >/dev/null 2>&1 || true
 }
 
 main() {
+    echo "1" >/tmp/stay_awake
     trap "cleanup" EXIT INT TERM HUP QUIT
 
     if [ "$PLATFORM" = "tg3040" ] && [ -z "$DEVICE" ]; then
@@ -201,20 +219,22 @@ main() {
         return 1
     fi
 
-    if [ ! -f "$progdir/bin/minui-list-$PLATFORM" ]; then
-        show_message "$progdir/bin/minui-list-$PLATFORM not found" 2
+    if ! command -v minui-list >/dev/null 2>&1; then
+        show_message "minui-list not found" 2
         return 1
     fi
 
-    if ! cd "$progdir/bin"; then
-        show_message "Failed to cd to $progdir/bin" 2
+    if ! command -v minui-presenter >/dev/null 2>&1; then
+        show_message "minui-presenter not found" 2
         return 1
     fi
-    chmod +x *
-    if ! cd "$progdir"; then
-        show_message "Failed to cd to $progdir" 2
-        return 1
-    fi
+
+    chmod +x "$PAK_DIR/bin/$architecture/$SERVICE_NAME"
+    chmod +x "$PAK_DIR/bin/$architecture/jq"
+    chmod +x "$PAK_DIR/bin/$PLATFORM/minui-list"
+    chmod +x "$PAK_DIR/bin/$PLATFORM/minui-presenter"
+    chmod +x "$PAK_DIR/bin/service-on"
+    chmod +x "$PAK_DIR/bin/on-boot"
 
     if [ "$PLATFORM" = "rg35xxplus" ]; then
         RGXX_MODEL="$(strings /mnt/vendor/bin/dmenu.bin | grep ^RG)"
@@ -225,48 +245,64 @@ main() {
     fi
 
     while true; do
-        sync
-        selection="$(main_screen)"
+        settings="$(current_settings)"
+        new_settings="$(main_screen "$settings")"
         exit_code=$?
         # exit codes: 2 = back button, 3 = menu button
         if [ "$exit_code" -ne 0 ]; then
             break
         fi
 
-        if echo "$selection" | grep -q "^Enable$"; then
-            show_message "Enabling $HUMAN_READABLE_NAME..." 1
-            if ! "$progdir/bin/service-on"; then
-                show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
-                continue
-            fi
+        echo "$settings" >"/tmp/${PAK_NAME}-old-settings.json"
+        echo "$new_settings" >"/tmp/${PAK_NAME}-new-settings.json"
 
-            show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
-            if ! wait_for_service 10; then
-                show_message "Failed to start $HUMAN_READABLE_NAME" 2
-            fi
-        elif echo "$selection" | grep -q "^Disable$"; then
-            show_message "Disabling $HUMAN_READABLE_NAME..." 1
-            if ! service_off; then
-                show_message "Failed to disable $HUMAN_READABLE_NAME!" 2
-            fi
+        old_enabled="$(jq -rM '.settings[0].selected' "/tmp/${PAK_NAME}-old-settings.json")"
+        enabled="$(jq -rM '.settings[0].selected' "/tmp/${PAK_NAME}-new-settings.json")"
 
-            show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
-            if ! wait_for_service_to_stop 10; then
-                show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+        old_start_on_boot="$(jq -rM '.settings[1].selected' "/tmp/${PAK_NAME}-old-settings.json")"
+        start_on_boot="$(jq -rM '.settings[1].selected' "/tmp/${PAK_NAME}-new-settings.json")"
+
+        if [ "$old_enabled" != "$enabled" ]; then
+            if [ "$enabled" = "1" ]; then
+                show_message "Enabling $HUMAN_READABLE_NAME" 2
+                if ! service-on; then
+                    show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                    continue
+                fi
+
+                show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
+                if ! wait_for_service 10; then
+                    show_message "Failed to start $HUMAN_READABLE_NAME" 2
+                fi
+                killall minui-presenter >/dev/null 2>&1 || true
+            else
+                show_message "Disabling $HUMAN_READABLE_NAME" 2
+                if ! service_off; then
+                    show_message "Failed to disable $HUMAN_READABLE_NAME!" 2
+                fi
+
+                show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
+                if ! wait_for_service_to_stop 10; then
+                    show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+                fi
+                killall minui-presenter >/dev/null 2>&1 || true
             fi
-        elif echo "$selection" | grep -q "^Enable start on boot$"; then
-            show_message "Enabling start on boot..." 1
-            if ! enable_start_on_boot; then
-                show_message "Failed to enable start on boot!" 2
-            fi
-        elif echo "$selection" | grep -q "^Disable start on boot$"; then
-            show_message "Disabling start on boot..." 1
-            if ! disable_start_on_boot; then
-                show_message "Failed to disable start on boot!" 2
+        fi
+
+        if [ "$old_start_on_boot" != "$start_on_boot" ]; then
+            if [ "$start_on_boot" = "1" ]; then
+                show_message "Enabling start on boot" 2
+                if ! enable_start_on_boot; then
+                    show_message "Failed to enable start on boot!" 2
+                fi
+            else
+                show_message "Disabling start on boot" 2
+                if ! disable_start_on_boot; then
+                    show_message "Failed to disable start on boot!" 2
+                fi
             fi
         fi
     done
-    sync
 }
 
-main "$@" >"$LOGS_PATH/$PAK_NAME.txt" 2>&1
+main "$@"
