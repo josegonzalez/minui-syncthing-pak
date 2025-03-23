@@ -192,7 +192,7 @@ main_screen() {
         fi
     fi
 
-    minui-list --file "$minui_list_file" --format json --header "$HUMAN_READABLE_NAME" --confirm-text "SAVE" --item-key "settings" --stdout-value state
+    minui-list --file "$minui_list_file" --format json --title "$HUMAN_READABLE_NAME" --confirm-text "SAVE" --item-key "settings" --stdout-value state
 }
 
 cleanup() {
