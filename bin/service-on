@@ -33,10 +33,11 @@ main() {
         mv "$PAK_DIR/config" "$USERDATA_PATH/Syncthing/config"
     fi
 
-    if [ ! -f "$USERDATA_PATH/Syncthing/config/config.xml" ]; then
+    SYNCTHING_HOME="$USERDATA_PATH/Syncthing/config"
+    mkdir -p "$SYNCTHING_HOME"
+    if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
         echo "Generating configuration for Syncthing"
-        mkdir -p "$USERDATA_PATH/Syncthing/config"
-        syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
+        HOME="$SYNCTHING_HOME" syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$SYNCTHING_HOME" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
 
         while is_service_running; do
             sleep 1
@@ -48,7 +49,7 @@ main() {
     sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$USERDATA_PATH/Syncthing/config/config.xml"
 
     echo "Running Syncthing"
-    (syncthing serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
+    (HOME="$SYNCTHING_HOME" syncthing serve "--home=$SYNCTHING_HOME" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
 }
 
 main "$@"
