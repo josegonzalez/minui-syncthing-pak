@@ -15,14 +15,6 @@ fi
 
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 
-is_service_running() {
-    if pgrep syncthing >/dev/null 2>&1; then
-        return 0
-    fi
-
-    return 1
-}
-
 main() {
     cd "$SDCARD_PATH" || return 1
 
@@ -38,7 +30,7 @@ main() {
         mkdir -p "$USERDATA_PATH/Syncthing/config"
         syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
 
-        while is_service_running; do
+        while service-is-running; do
             sleep 1
         done
 

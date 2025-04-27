@@ -1,0 +1,13 @@
+#!/bin/sh
+BIN_DIR="$(dirname "$0")"
+PAK_DIR="$(dirname "$BIN_DIR")"
+PAK_NAME="$(basename "$PAK_DIR")"
+PAK_NAME="${PAK_NAME%.*}"
+set -x
+
+echo "$0" "$@"
+cd "$PAK_DIR" || exit 1
+
+SERVICE_NAME="syncthing"
+
+killall "$SERVICE_NAME"

@@ -4,5 +4,7 @@ bin/*
 res/fonts/*
 !res/fonts/.gitkeep
 
-!bin/service-on
 !bin/on-boot
+!bin/service-is-running
+!bin/service-off
+!bin/service-on
