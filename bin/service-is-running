@@ -1,0 +1,25 @@
+#!/bin/sh
+BIN_DIR="$(dirname "$0")"
+PAK_DIR="$(dirname "$BIN_DIR")"
+PAK_NAME="$(basename "$PAK_DIR")"
+PAK_NAME="${PAK_NAME%.*}"
+set -x
+
+SERVICE_NAME="syncthing"
+LAUNCHES_SCRIPT="false"
+
+main() {
+    if pgrep "$SERVICE_NAME" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ "$LAUNCHES_SCRIPT" = "true" ]; then
+        if pgrep -fn "$SERVICE_NAME" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+main "$@"
