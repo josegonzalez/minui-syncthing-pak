@@ -1,12 +1,4 @@
 {
-    "label": "Syncthing",
-    "launch": "launch.sh",
-    "description": "Manages Syncthing",
-    "pak_type": "tool",
-    "platforms": [
-        "rg35xxplus",
-        "tg5040"
-    ],
     "settings": [
         {
             "name": "Enable",
