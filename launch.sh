@@ -159,7 +159,7 @@ current_settings() {
     minui_list_file="/tmp/${PAK_NAME}-settings.json"
     rm -f "$minui_list_file"
 
-    jq -rM '{settings: .settings}' "$PAK_DIR/config.json" >"$minui_list_file"
+    jq -rM '{settings: .settings}' "$PAK_DIR/settings.json" >"$minui_list_file"
     if is_service_running; then
         jq '.settings[0].selected = 1' "$minui_list_file" >"$minui_list_file.tmp"
         mv "$minui_list_file.tmp" "$minui_list_file"
