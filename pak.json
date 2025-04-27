@@ -1,14 +1,14 @@
 {
-    "name": "Syncthing",
-    "type": "TOOL",
-    "description": "Manages Syncthing",
-    "author": "josegonzalez",
-    "repo_url": "https://github.com/josegonzalez/minui-syncthing-pak",
-    "release_filename": "Syncthing.pak.zip",
-    "platforms": [
-        "rg35xxplus",
-        "tg5040"
-    ],
-    "launch": "launch.sh",
-    "version": "latest"
+  "name": "Syncthing",
+  "type": "TOOL",
+  "description": "Manages Syncthing",
+  "author": "josegonzalez",
+  "repo_url": "https://github.com/josegonzalez/minui-syncthing-pak",
+  "release_filename": "Syncthing.pak.zip",
+  "platforms": [
+    "rg35xxplus",
+    "tg5040"
+  ],
+  "launch": "launch.sh",
+  "version": "0.3.3"
 }
