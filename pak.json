@@ -10,5 +10,5 @@
     "tg5040"
   ],
   "launch": "launch.sh",
-  "version": "0.4.1"
+  "version": "0.4.2"
 }
