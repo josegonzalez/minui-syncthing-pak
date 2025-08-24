@@ -6,6 +6,12 @@ bin/arm64/syncthing
 bin/arm64/syncthing.LICENSE
 bin/arm64/jq
 bin/arm64/jq.LICENSE
+bin/miyoomini/minui-list
+bin/miyoomini/minui-presenter
+bin/my282/minui-list
+bin/my282/minui-presenter
+bin/my355/minui-list
+bin/my355/minui-presenter
 bin/rg35xxplus/minui-list
 bin/rg35xxplus/minui-presenter
 bin/tg5040/minui-list
