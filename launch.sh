@@ -20,7 +20,6 @@ fi
 export HOME="$USERDATA_PATH/$PAK_NAME"
 export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
-export SSL_CERT_FILE="$PAK_DIR/certs/ca-certificates.crt"
 
 SERVICE_NAME="syncthing"
 HUMAN_READABLE_NAME="Syncthing"
