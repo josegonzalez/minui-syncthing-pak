@@ -14,6 +14,7 @@ if uname -m | grep -q '64'; then
 fi
 
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
+export SSL_CERT_FILE="$PAK_DIR/certs/ca-certificates.crt"
 
 main() {
     cd "$SDCARD_PATH" || return 1
