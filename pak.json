@@ -10,7 +10,8 @@
     "my282",
     "my355",
     "rg35xxplus",
-    "tg5040"
+    "tg5040",
+    "tg5050"
   ],
   "launch": "launch.sh",
   "version": "0.7.2"
