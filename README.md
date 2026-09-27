@@ -11,6 +11,7 @@ A MinUI app wrapping [`syncthing`](https://syncthing.net/), a continuous file sy
 
 This pak is designed and tested on the following MinUI Platforms and devices:
 
+- `h700`: Anbernic RG34XX, RG34XX SP, RG35XX Plus, RG35XX 2024, RG35XX H, RG35XX Pro, RG35XX SP, RG40XX H, RG40XX V, RG CubeXX and RG SP, running NextUI on BaseOS
 - `miyoomini`: Miyoo Mini Plus (_not_ the Miyoo Mini)
 - `my282`: Miyoo A30
 - `my355`: Miyoo Flip
@@ -22,12 +23,12 @@ Use the correct platform for your device.
 
 ## Installation
 
-1. Mount your TrimUI Brick SD card.
+1. Mount your device's SD card.
 2. Download the latest release from Github. It will be named `Syncthing.pak.zip`.
 3. Copy the zip file to `/Tools/$PLATFORM/Syncthing.pak.zip`.
 4. Extract the zip in place, then delete the zip file.
 5. Confirm that there is a `/Tools/$PLATFORM/Syncthing.pak/launch.sh` file on your SD card.
-6. Unmount your SD Card and insert it into your TrimUI Brick.
+6. Unmount your SD Card and insert it into your device.
 
 ## Usage
 

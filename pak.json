@@ -6,6 +6,7 @@
   "repo_url": "https://github.com/josegonzalez/minui-syncthing-pak",
   "release_filename": "Syncthing.pak.zip",
   "platforms": [
+    "h700",
     "miyoomini",
     "my282",
     "my355",
