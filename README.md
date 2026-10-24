@@ -43,3 +43,10 @@ The default credentials are:
 ### Debug Logging
 
 Debug logs are written to the`$SDCARD_PATH/.userdata/$PLATFORM/logs/` folder.
+
+## Development
+
+- `make build` downloads the bundled binaries for every platform.
+- `make test` runs the [bats](https://github.com/bats-core/bats-core) suite in `tests/`.
+
+A scheduled workflow opens a pull request when Syncthing publishes a new stable release, laid out like the dependabot pull requests for GitHub Actions. Pull requests opened with the default workflow token do not trigger CI, so set a `GH_ACCESS_TOKEN` repository secret if CI should build them.

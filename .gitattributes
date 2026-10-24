@@ -3,3 +3,5 @@
 .gitarchiveinclude export-ignore
 .gitignore export-ignore
 Makefile export-ignore
+scripts export-ignore
+tests export-ignore

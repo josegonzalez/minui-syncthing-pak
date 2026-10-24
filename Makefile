@@ -84,3 +84,11 @@ push: release
 	rm -rf "dist/$(PAK_NAME).pak"
 	cd dist && unzip "$(PAK_NAME).pak.zip" -d "$(PAK_NAME).pak"
 	adb push "dist/$(PAK_NAME).pak/." "$(PUSH_SDCARD_PATH)/$(PAK_FOLDER)/$(PUSH_PLATFORM)/$(PAK_NAME).pak"
+
+test:
+	bats tests/
+
+# Print the value of any make variable, e.g. `make print-SYNCTHING_VERSION`.
+# update-syncthing.yaml and the bats suite read the pinned version through this.
+print-%:
+	@echo '$*=$($*)'
