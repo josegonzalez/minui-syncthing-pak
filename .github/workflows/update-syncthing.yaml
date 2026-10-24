@@ -38,10 +38,18 @@ jobs:
         run: |
           latest="$(gh release view --repo syncthing/syncthing --json tagName --jq .tagName)"
           pinned="$(make --no-print-directory print-SYNCTHING_VERSION | cut -d= -f2)"
+          # Named the way dependabot names its branches, one per version.
+          branch="deps/github_releases/syncthing/syncthing-${latest#v}"
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
           echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
           if [ "$latest" = "$pinned" ]; then
             echo "Syncthing $pinned is the latest release"
+            exit 0
+          fi
+          # Like dependabot, a bump closed without merging is not reopened.
+          if [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state closed --json number --jq length)" -gt 0 ]; then
+            echo "The pull request for $latest was closed, not reopening it"
             exit 0
           fi
           echo "update=true" >> "$GITHUB_OUTPUT"
@@ -66,9 +74,8 @@ jobs:
             echo "COMMIT_MESSAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # One branch for every release: a newer release rewrites the open pull
-      # request rather than leaving it to go stale beside a second one.
       - name: Open pull request
+        id: pr
         if: steps.release.outputs.update == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
@@ -79,5 +86,12 @@ jobs:
           title: ${{ steps.message.outputs.title }}
           body-path: tmp/pr/pr-body.md
           labels: dependencies
-          branch: build/update-syncthing
+          branch: ${{ steps.release.outputs.branch }}
           delete-branch: true
+
+      - name: Close superseded pull requests
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: scripts/close-superseded-syncthing-prs.sh "${{ steps.release.outputs.branch }}" "${{ steps.pr.outputs.pull-request-number }}"
