@@ -1,0 +1,83 @@
+---
+name: "update-syncthing"
+
+# yamllint disable-line rule:truthy
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: update
+    runs-on: ubuntu-24.04
+    env:
+      # A pull request opened with the default GITHUB_TOKEN does not trigger
+      # other workflows, so ci.yaml would never build it. GH_ACCESS_TOKEN lets
+      # CI run; without it the pull request still opens, just unbuilt.
+      PR_TOKEN: ${{ secrets.GH_ACCESS_TOKEN || github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ env.PR_TOKEN }}
+
+      - name: Compare with the latest upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh release view --repo syncthing/syncthing --json tagName --jq .tagName)"
+          pinned="$(make --no-print-directory print-SYNCTHING_VERSION | cut -d= -f2)"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$latest" = "$pinned" ]; then
+            echo "Syncthing $pinned is the latest release"
+            exit 0
+          fi
+          echo "update=true" >> "$GITHUB_OUTPUT"
+
+      - name: Pin the new release
+        if: steps.release.outputs.update == 'true'
+        run: scripts/bump-syncthing.sh "${{ steps.release.outputs.latest }}"
+
+      # Laid out like this repo's dependabot pull requests, so both kinds of
+      # dependency update read the same.
+      - name: Write the commit message and pull request body
+        id: message
+        if: steps.release.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/syncthing-pr-message.sh "${{ steps.release.outputs.pinned }}" "${{ steps.release.outputs.latest }}" tmp/pr
+          echo "title=$(head -n 1 tmp/pr/commit-message.txt)" >> "$GITHUB_OUTPUT"
+          {
+            echo "commit-message<<COMMIT_MESSAGE_EOF"
+            cat tmp/pr/commit-message.txt
+            echo "COMMIT_MESSAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # One branch for every release: a newer release rewrites the open pull
+      # request rather than leaving it to go stale beside a second one.
+      - name: Open pull request
+        if: steps.release.outputs.update == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ env.PR_TOKEN }}
+          add-paths: |
+            Makefile
+          commit-message: ${{ steps.message.outputs.commit-message }}
+          title: ${{ steps.message.outputs.title }}
+          body-path: tmp/pr/pr-body.md
+          labels: dependencies
+          branch: build/update-syncthing
+          delete-branch: true
