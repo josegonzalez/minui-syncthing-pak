@@ -20,3 +20,4 @@ bin/tg5040/minui-list
 bin/tg5040/minui-presenter
 bin/tg5050/minui-list
 bin/tg5050/minui-presenter
+share/data.ext4.gz

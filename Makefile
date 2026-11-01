@@ -13,13 +13,34 @@ SYNCTHING_VERSION ?= v2.1.7
 MINUI_LIST_VERSION := 0.15.4
 MINUI_PRESENTER_VERSION := 0.13.4
 
+# Size of the ext4 database image. Must stay under 4G: a FAT32-formatted
+# card cannot hold a single file larger than that.
+DATA_IMAGE_SIZE ?= 128M
+
 clean:
 	rm -f bin/*/jq || true
 	rm -f bin/*/syncthing || true
 	rm -f bin/*/minui-list || true
 	rm -f bin/*/minui-presenter || true
+	rm -f share/data.ext4 share/data.ext4.gz || true
 
-build: $(foreach platform,$(PLATFORMS),bin/$(platform)/minui-list bin/$(platform)/minui-presenter) $(foreach arch,$(ARCHITECTURES),bin/$(arch)/syncthing bin/$(arch)/jq)
+build: share/data.ext4.gz $(foreach platform,$(PLATFORMS),bin/$(platform)/minui-list bin/$(platform)/minui-presenter) $(foreach arch,$(ARCHITECTURES),bin/$(arch)/syncthing bin/$(arch)/jq)
+
+share/data.ext4.gz:
+	mkdir -p share
+	rm -f share/data.ext4 share/data.ext4.gz
+	truncate -s $(DATA_IMAGE_SIZE) share/data.ext4
+	# The feature set is listed outright rather than subtracted from the
+	# defaults: mke2fs rejects a feature name it does not know even when it is
+	# being cleared, so "^orphan_file" breaks the build on e2fsprogs < 1.47.
+	# Nothing named here is newer than e2fsprogs 1.42. Omitting metadata_csum
+	# and 64bit keeps the image mountable on older kernels; has_journal is
+	# wanted, so the filesystem survives an abrupt power-off.
+	mkfs.ext4 -F -q -b 4096 -I 256 -m 0 -N 4096 \
+		-L syncthing-data -E root_owner=0:0 \
+		-O none,has_journal,ext_attr,resize_inode,dir_index,filetype,extent,flex_bg,sparse_super,large_file,huge_file,dir_nlink,extra_isize \
+		share/data.ext4
+	gzip -9 share/data.ext4
 
 bin/arm/jq:
 	mkdir -p bin/arm
