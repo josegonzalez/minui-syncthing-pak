@@ -9,3 +9,4 @@ res/fonts/*
 !bin/service-off
 !bin/service-on
 share/*
+!bin/syncthing-data.sh
