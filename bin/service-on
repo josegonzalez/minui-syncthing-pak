@@ -16,6 +16,9 @@ fi
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 export SSL_CERT_FILE="$PAK_DIR/certs/ca-certificates.crt"
 
+# shellcheck source=bin/syncthing-data.sh
+. "$BIN_DIR/syncthing-data.sh"
+
 main() {
     cd "$SDCARD_PATH" || return 1
 
@@ -23,13 +26,18 @@ main() {
 
     if [ -d "$PAK_DIR/config" ]; then
         mkdir -p "$USERDATA_PATH/Syncthing"
-        mv "$PAK_DIR/config" "$USERDATA_PATH/Syncthing/config"
+        mv "$PAK_DIR/config" "$SYNCTHING_CONFIG_DIR"
     fi
 
-    if [ ! -f "$USERDATA_PATH/Syncthing/config/config.xml" ]; then
+    # Must happen before "generate", or a database is created on the card.
+    syncthing_data_start
+
+    if [ ! -f "$SYNCTHING_CONFIG_DIR/config.xml" ]; then
         echo "Generating configuration for Syncthing"
-        mkdir -p "$USERDATA_PATH/Syncthing/config"
-        syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
+        mkdir -p "$SYNCTHING_CONFIG_DIR"
+        syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" \
+            "--config=$SYNCTHING_CONFIG_DIR" "--data=$SYNCTHING_DATA_DIR" \
+            >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
 
         while service-is-running; do
             sleep 1
@@ -38,10 +46,11 @@ main() {
         killall syncthing >/dev/null 2>&1 || true
     fi
 
-    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$USERDATA_PATH/Syncthing/config/config.xml"
+    sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$SYNCTHING_CONFIG_DIR/config.xml"
 
     echo "Running Syncthing"
-    (syncthing serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
+    (syncthing serve "--config=$SYNCTHING_CONFIG_DIR" "--data=$SYNCTHING_DATA_DIR" \
+        >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
 }
 
 main "$@"
