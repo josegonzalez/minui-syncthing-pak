@@ -10,16 +10,24 @@ PLATFORMS := h700 miyoomini my282 my355 rg35xxplus tg5040 tg5050
 
 JQ_VERSION ?= 1.7.1
 SYNCTHING_VERSION ?= v2.1.7
+# The last release of the Syncthing 1.x line. 1.x keeps its index in LevelDB
+# rather than SQLite, which is why it works on the exFAT and FAT32 cards MinUI
+# and NextUI require. The 1.x line is closed, so this pin is final, and
+# update-syncthing.yaml follows the newest release and deliberately leaves it be.
+SYNCTHING_V1_VERSION ?= v1.30.0
 MINUI_LIST_VERSION := 0.15.4
 MINUI_PRESENTER_VERSION := 0.13.4
+
+SYNCTHING_V1_BINS := $(foreach arch,$(ARCHITECTURES),bin/v1/$(arch)/syncthing)
 
 clean:
 	rm -f bin/*/jq || true
 	rm -f bin/*/syncthing || true
+	rm -rf bin/v1 || true
 	rm -f bin/*/minui-list || true
 	rm -f bin/*/minui-presenter || true
 
-build: $(foreach platform,$(PLATFORMS),bin/$(platform)/minui-list bin/$(platform)/minui-presenter) $(foreach arch,$(ARCHITECTURES),bin/$(arch)/syncthing bin/$(arch)/jq)
+build: $(foreach platform,$(PLATFORMS),bin/$(platform)/minui-list bin/$(platform)/minui-presenter) $(foreach arch,$(ARCHITECTURES),bin/$(arch)/syncthing bin/$(arch)/jq) $(SYNCTHING_V1_BINS)
 
 bin/arm/jq:
 	mkdir -p bin/arm
@@ -37,6 +45,17 @@ bin/%/syncthing:
 	rm -rf syncthing-linux-$*-$(SYNCTHING_VERSION)
 	chmod +x bin/$*/syncthing
 	curl -sSL -o bin/$*/syncthing.LICENSE "https://raw.githubusercontent.com/syncthing/syncthing/refs/heads/$(SYNCTHING_VERSION)/LICENSE"
+
+# A static pattern rule rather than a plain one, because a make stem matches
+# across slashes: "bin/%/syncthing" would otherwise claim these targets with $*
+# as "v1/arm" and try to fetch a 2.x build for an architecture of that name.
+# Naming the targets explicitly gives this rule precedence.
+$(SYNCTHING_V1_BINS): bin/v1/%/syncthing:
+	mkdir -p bin/v1/$*
+	curl -sSL https://github.com/syncthing/syncthing/releases/download/$(SYNCTHING_V1_VERSION)/syncthing-linux-$*-$(SYNCTHING_V1_VERSION).tar.gz | tar -xzvf - syncthing-linux-$*-$(SYNCTHING_V1_VERSION)/syncthing && mv syncthing-linux-$*-$(SYNCTHING_V1_VERSION)/syncthing bin/v1/$*/syncthing
+	rm -rf syncthing-linux-$*-$(SYNCTHING_V1_VERSION)
+	chmod +x bin/v1/$*/syncthing
+	curl -f -sSL -o bin/v1/$*/syncthing.LICENSE "https://raw.githubusercontent.com/syncthing/syncthing/refs/tags/$(SYNCTHING_V1_VERSION)/LICENSE"
 
 bin/h700/minui-list:
 	mkdir -p bin/h700
