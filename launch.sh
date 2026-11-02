@@ -51,6 +51,19 @@ show_message() {
     fi
 }
 
+# A failure worth reading. Waits for a button instead of flashing past, and
+# names the folder holding the logs: launch.sh sends everything it and the
+# service scripts print there, so it is the right place to look for any of
+# these. Two seconds was not long enough to read a message, let alone act on it.
+show_error() {
+    message="$1"
+
+    killall minui-presenter >/dev/null 2>&1 || true
+    echo "$message" 1>&2
+    minui-presenter --message "$message\nLog: .userdata/$PLATFORM/logs" \
+        --timeout 0 --confirm-show --confirm-text "OK"
+}
+
 # A blocking question. Returns 0 only when the user explicitly confirms, so
 # cancelling and the dialog failing both read as "no".
 confirm_message() {
@@ -314,24 +327,24 @@ main() {
             if [ "$enabled" = "1" ]; then
                 show_message "Enabling $HUMAN_READABLE_NAME" 2
                 if ! service-on; then
-                    show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                    show_error "Could not start $HUMAN_READABLE_NAME."
                     continue
                 fi
 
                 show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
                 if ! wait_for_service 10; then
-                    show_message "Failed to start $HUMAN_READABLE_NAME" 2
+                    show_error "$HUMAN_READABLE_NAME did not come up."
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             else
                 show_message "Disabling $HUMAN_READABLE_NAME" 2
                 if ! service-off; then
-                    show_message "Failed to disable $HUMAN_READABLE_NAME!" 2
+                    show_error "Could not stop $HUMAN_READABLE_NAME."
                 fi
 
                 show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
                 if ! wait_for_service_to_stop 10; then
-                    show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+                    show_error "$HUMAN_READABLE_NAME did not stop."
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             fi
@@ -359,18 +372,18 @@ main() {
             if service-is-running; then
                 show_message "Switching $HUMAN_READABLE_NAME version" 2
                 if ! service-off; then
-                    show_message "Failed to stop $HUMAN_READABLE_NAME!" 2
+                    show_error "$HUMAN_READABLE_NAME did not stop."
                 fi
                 wait_for_service_to_stop 10
 
                 if ! service-on; then
-                    show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                    show_error "Could not start $HUMAN_READABLE_NAME."
                     continue
                 fi
 
                 show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
                 if ! wait_for_service 10; then
-                    show_message "Failed to start $HUMAN_READABLE_NAME" 2
+                    show_error "$HUMAN_READABLE_NAME did not come up."
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             fi
@@ -380,12 +393,12 @@ main() {
             if [ "$start_on_boot" = "1" ]; then
                 show_message "Enabling start on boot" 2
                 if ! enable_start_on_boot; then
-                    show_message "Failed to enable start on boot!" 2
+                    show_error "Could not enable start on boot."
                 fi
             else
                 show_message "Disabling start on boot" 2
                 if ! disable_start_on_boot; then
-                    show_message "Failed to disable start on boot!" 2
+                    show_error "Could not disable start on boot."
                 fi
             fi
         fi
