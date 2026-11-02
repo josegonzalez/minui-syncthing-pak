@@ -175,6 +175,16 @@ main_screen() {
 
     echo "$settings" >"$minui_list_file"
 
+    # Syncthing 2.x cannot keep its SQLite index on a FAT card and reports disk
+    # I/O errors continuously on this platform, dropping peer connections as it
+    # goes; 1.x is unaffected. h700 is the only platform where the errors are
+    # confirmed, so the note is not shown anywhere else, and it sits next to the
+    # setting that resolves it rather than interrupting with a dialog.
+    if [ "$PLATFORM" = "h700" ] && [ "$(syncthing_selected_version)" = 2 ]; then
+        jq '.settings[.settings | length] |= . + {"name": "Note", "options": ["2.x has bugs on h700"], "selected": 0, "features": {"unselectable": true}}' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+    fi
+
     if service-is-running; then
         service_pid="$(get_service_pid)"
         jq --arg pid "$service_pid" '.settings[.settings | length] |= . + {"name": "PID", "options": [$pid], "selected": 0, "features": {"unselectable": true}}' "$minui_list_file" >"$minui_list_file.tmp"
