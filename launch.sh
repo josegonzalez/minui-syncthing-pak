@@ -51,6 +51,39 @@ show_message() {
     fi
 }
 
+# A blocking question. Returns 0 only when the user explicitly confirms, so
+# cancelling and the dialog failing both read as "no".
+confirm_message() {
+    message="$1"
+
+    killall minui-presenter >/dev/null 2>&1 || true
+    echo "$message" 1>&2
+    # A timeout of 0 waits for a button and keeps the screen awake. B is acted
+    # on whether it is drawn or not, so draw it and label what it does.
+    minui-presenter --message "$message" --timeout 0 \
+        --confirm-show --confirm-text "CONTINUE" \
+        --cancel-show --cancel-text "CANCEL"
+}
+
+# What the user is agreeing to differs by direction, so only ask where there is
+# something worth saying.
+confirm_version_switch() {
+    if [ "$1" = "1" ]; then
+        confirm_message "Use Syncthing 1.x?\nRebuilds the index (slow).\nNo longer updated."
+        return $?
+    fi
+
+    # Going back to 2.x is choosing a version that is known to fail here.
+    if [ "$PLATFORM" = "h700" ]; then
+        confirm_message "Use Syncthing 2.x?\nHas disk errors on h700."
+        return $?
+    fi
+
+    # Elsewhere there is nothing to warn about: 2.x is the default, and it
+    # migrates the 1.x index itself in about a second.
+    return 0
+}
+
 disable_start_on_boot() {
     sed -i "/${PAK_NAME}.pak-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     sync
@@ -308,6 +341,12 @@ main() {
         version="$(jq -rM '.settings[2].selected' "/tmp/${PAK_NAME}-new-settings.json")"
 
         if [ "$old_version" != "$version" ]; then
+            if ! confirm_version_switch "$version"; then
+                # Leave the stored choice alone. The loop redraws from
+                # current_settings, so the row returns to what is running.
+                continue
+            fi
+
             if [ "$version" = "1" ]; then
                 syncthing_set_version 1
             else
