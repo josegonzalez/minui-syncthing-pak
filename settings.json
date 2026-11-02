@@ -9,6 +9,11 @@
             "name": "Start on boot",
             "options": ["false", "true"],
             "selected": 0
+        },
+        {
+            "name": "Syncthing version",
+            "options": ["2.x", "1.x"],
+            "selected": 0
         }
     ]
 }

@@ -16,10 +16,23 @@ fi
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 export SSL_CERT_FILE="$PAK_DIR/certs/ca-certificates.crt"
 
+# shellcheck source=bin/syncthing-version.sh
+. "$BIN_DIR/syncthing-version.sh"
+
 main() {
     cd "$SDCARD_PATH" || return 1
 
-    chmod +x "$PAK_DIR/bin/$architecture/syncthing"
+    syncthing_version="$(syncthing_selected_version)"
+    syncthing_bin="$PAK_DIR/bin/$architecture/syncthing"
+    if [ "$syncthing_version" = 1 ]; then
+        syncthing_bin="$PAK_DIR/bin/v1/$architecture/syncthing"
+        # Ahead of the 2.x directory, so "syncthing" resolves to the 1.x build
+        # while the running process keeps that name for pgrep and killall.
+        export PATH="$PAK_DIR/bin/v1/$architecture:$PATH"
+    fi
+    echo "Using Syncthing $syncthing_version.x"
+
+    chmod +x "$syncthing_bin"
 
     if [ -d "$PAK_DIR/config" ]; then
         mkdir -p "$USERDATA_PATH/Syncthing"
@@ -29,7 +42,14 @@ main() {
     if [ ! -f "$USERDATA_PATH/Syncthing/config/config.xml" ]; then
         echo "Generating configuration for Syncthing"
         mkdir -p "$USERDATA_PATH/Syncthing/config"
-        syncthing generate --no-default-folder --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
+        set -- --gui-user="minui" --gui-password="minui" "--home=$USERDATA_PATH/Syncthing/config/"
+        if [ "$syncthing_version" = 1 ]; then
+            # 1.x creates a "Default Folder" on first start unless told not to.
+            # 2.x has no such flag and creates no default folder, so passing it
+            # there fails the whole call.
+            set -- --no-default-folder "$@"
+        fi
+        syncthing generate "$@" >"$LOGS_PATH/$PAK_NAME.generate.txt" 2>&1 &
 
         while service-is-running; do
             sleep 1
@@ -41,7 +61,14 @@ main() {
     sed -i "s|<address>127.0.0.1:8384</address>|<address>0.0.0.0:8384</address>|g" "$USERDATA_PATH/Syncthing/config/config.xml"
 
     echo "Running Syncthing"
-    (syncthing serve "--home=$USERDATA_PATH/Syncthing/config/" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
+    set -- "--home=$USERDATA_PATH/Syncthing/config/"
+    if [ "$syncthing_version" = 1 ]; then
+        # 2.x writes a version 52 config; 1.x understands 37 and refuses to
+        # start on anything newer without this. It archives the old file as
+        # config.xml.v52 before rewriting it, so the switch can be undone.
+        set -- --allow-newer-config "$@"
+    fi
+    (syncthing serve "$@" >"$LOGS_PATH/$PAK_NAME.service.txt" &) &
 }
 
 main "$@"

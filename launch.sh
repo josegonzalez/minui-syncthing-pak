@@ -31,6 +31,9 @@ LAUNCHES_SCRIPT="false"
 NETWORK_PORT=8384
 NETWORK_SCHEME="http"
 
+# shellcheck source=bin/syncthing-version.sh
+. "$PAK_DIR/bin/syncthing-version.sh"
+
 show_message() {
     message="$1"
     seconds="$2"
@@ -46,6 +49,52 @@ show_message() {
     else
         minui-presenter --message "$message" --timeout "$seconds"
     fi
+}
+
+# A failure worth reading. Waits for a button instead of flashing past, and
+# names the folder holding the logs: launch.sh sends everything it and the
+# service scripts print there, so it is the right place to look for any of
+# these. Two seconds was not long enough to read a message, let alone act on it.
+show_error() {
+    message="$1"
+
+    killall minui-presenter >/dev/null 2>&1 || true
+    echo "$message" 1>&2
+    minui-presenter --message "$message\nLog: .userdata/$PLATFORM/logs" \
+        --timeout 0 --confirm-show --confirm-text "OK"
+}
+
+# A blocking question. Returns 0 only when the user explicitly confirms, so
+# cancelling and the dialog failing both read as "no".
+confirm_message() {
+    message="$1"
+
+    killall minui-presenter >/dev/null 2>&1 || true
+    echo "$message" 1>&2
+    # A timeout of 0 waits for a button and keeps the screen awake. B is acted
+    # on whether it is drawn or not, so draw it and label what it does.
+    minui-presenter --message "$message" --timeout 0 \
+        --confirm-show --confirm-text "CONTINUE" \
+        --cancel-show --cancel-text "CANCEL"
+}
+
+# What the user is agreeing to differs by direction, so only ask where there is
+# something worth saying.
+confirm_version_switch() {
+    if [ "$1" = "1" ]; then
+        confirm_message "Use Syncthing 1.x?\nRebuilds the index (slow).\nNo longer updated."
+        return $?
+    fi
+
+    # Going back to 2.x is choosing a version that is known to fail here.
+    if [ "$PLATFORM" = "h700" ]; then
+        confirm_message "Use Syncthing 2.x?\nHas disk errors on h700."
+        return $?
+    fi
+
+    # Elsewhere there is nothing to warn about: 2.x is the default, and it
+    # migrates the 1.x index itself in about a second.
+    return 0
 }
 
 disable_start_on_boot() {
@@ -156,6 +205,11 @@ current_settings() {
         mv "$minui_list_file.tmp" "$minui_list_file"
     fi
 
+    if [ "$(syncthing_selected_version)" = 1 ]; then
+        jq '.settings[2].selected = 1' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+    fi
+
     cat "$minui_list_file"
 }
 
@@ -166,6 +220,16 @@ main_screen() {
     rm -f "$minui_list_file"
 
     echo "$settings" >"$minui_list_file"
+
+    # Syncthing 2.x cannot keep its SQLite index on a FAT card and reports disk
+    # I/O errors continuously on this platform, dropping peer connections as it
+    # goes; 1.x is unaffected. h700 is the only platform where the errors are
+    # confirmed, so the note is not shown anywhere else, and it sits next to the
+    # setting that resolves it rather than interrupting with a dialog.
+    if [ "$PLATFORM" = "h700" ] && [ "$(syncthing_selected_version)" = 2 ]; then
+        jq '.settings[.settings | length] |= . + {"name": "Note", "options": ["2.x has bugs on h700"], "selected": 0, "features": {"unselectable": true}}' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+    fi
 
     if service-is-running; then
         service_pid="$(get_service_pid)"
@@ -221,6 +285,7 @@ main() {
     fi
 
     chmod +x "$PAK_DIR/bin/$architecture/$SERVICE_NAME"
+    chmod +x "$PAK_DIR/bin/v1/$architecture/$SERVICE_NAME"
     chmod +x "$PAK_DIR/bin/$architecture/jq"
     chmod +x "$PAK_DIR/bin/$PLATFORM/minui-list"
     chmod +x "$PAK_DIR/bin/$PLATFORM/minui-presenter"
@@ -262,24 +327,63 @@ main() {
             if [ "$enabled" = "1" ]; then
                 show_message "Enabling $HUMAN_READABLE_NAME" 2
                 if ! service-on; then
-                    show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                    show_error "Could not start $HUMAN_READABLE_NAME."
                     continue
                 fi
 
                 show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
                 if ! wait_for_service 10; then
-                    show_message "Failed to start $HUMAN_READABLE_NAME" 2
+                    show_error "$HUMAN_READABLE_NAME did not come up."
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             else
                 show_message "Disabling $HUMAN_READABLE_NAME" 2
                 if ! service-off; then
-                    show_message "Failed to disable $HUMAN_READABLE_NAME!" 2
+                    show_error "Could not stop $HUMAN_READABLE_NAME."
                 fi
 
                 show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
                 if ! wait_for_service_to_stop 10; then
-                    show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+                    show_error "$HUMAN_READABLE_NAME did not stop."
+                fi
+                killall minui-presenter >/dev/null 2>&1 || true
+            fi
+        fi
+
+        old_version="$(jq -rM '.settings[2].selected' "/tmp/${PAK_NAME}-old-settings.json")"
+        version="$(jq -rM '.settings[2].selected' "/tmp/${PAK_NAME}-new-settings.json")"
+
+        if [ "$old_version" != "$version" ]; then
+            if ! confirm_version_switch "$version"; then
+                # Leave the stored choice alone. The loop redraws from
+                # current_settings, so the row returns to what is running.
+                continue
+            fi
+
+            if [ "$version" = "1" ]; then
+                syncthing_set_version 1
+            else
+                syncthing_set_version 2
+            fi
+
+            # The two store their indexes in different formats, so whichever is
+            # selected now has to build its own. Restart rather than waiting for
+            # the next boot, so the setting matches what is actually running.
+            if service-is-running; then
+                show_message "Switching $HUMAN_READABLE_NAME version" 2
+                if ! service-off; then
+                    show_error "$HUMAN_READABLE_NAME did not stop."
+                fi
+                wait_for_service_to_stop 10
+
+                if ! service-on; then
+                    show_error "Could not start $HUMAN_READABLE_NAME."
+                    continue
+                fi
+
+                show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
+                if ! wait_for_service 10; then
+                    show_error "$HUMAN_READABLE_NAME did not come up."
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             fi
@@ -289,12 +393,12 @@ main() {
             if [ "$start_on_boot" = "1" ]; then
                 show_message "Enabling start on boot" 2
                 if ! enable_start_on_boot; then
-                    show_message "Failed to enable start on boot!" 2
+                    show_error "Could not enable start on boot."
                 fi
             else
                 show_message "Disabling start on boot" 2
                 if ! disable_start_on_boot; then
-                    show_message "Failed to disable start on boot!" 2
+                    show_error "Could not disable start on boot."
                 fi
             fi
         fi
