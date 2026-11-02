@@ -24,19 +24,19 @@ build: $(foreach platform,$(PLATFORMS),bin/$(platform)/minui-list bin/$(platform
 bin/arm/jq:
 	mkdir -p bin/arm
 	curl -f -o bin/arm/jq -sSL https://github.com/jqlang/jq/releases/download/jq-$(JQ_VERSION)/jq-linux-armhf
-	curl -sSL -o bin/arm/jq.LICENSE "https://raw.githubusercontent.com/jqlang/jq/refs/heads/$(JQ_VERSION)/COPYING"
+	curl -f -sSL -o bin/arm/jq.LICENSE "https://raw.githubusercontent.com/jqlang/jq/refs/tags/jq-$(JQ_VERSION)/COPYING"
 
 bin/arm64/jq:
 	mkdir -p bin/arm64
 	curl -f -o bin/arm64/jq -sSL https://github.com/jqlang/jq/releases/download/jq-$(JQ_VERSION)/jq-linux-arm64
-	curl -sSL -o bin/arm64/jq.LICENSE "https://raw.githubusercontent.com/jqlang/jq/refs/heads/$(JQ_VERSION)/COPYING"
+	curl -f -sSL -o bin/arm64/jq.LICENSE "https://raw.githubusercontent.com/jqlang/jq/refs/tags/jq-$(JQ_VERSION)/COPYING"
 
 bin/%/syncthing:
 	mkdir -p bin/$*
 	curl -sSL https://github.com/syncthing/syncthing/releases/download/$(SYNCTHING_VERSION)/syncthing-linux-$*-$(SYNCTHING_VERSION).tar.gz | tar -xzvf - syncthing-linux-$*-$(SYNCTHING_VERSION)/syncthing && mv syncthing-linux-$*-$(SYNCTHING_VERSION)/syncthing bin/$*/syncthing
 	rm -rf syncthing-linux-$*-$(SYNCTHING_VERSION)
 	chmod +x bin/$*/syncthing
-	curl -sSL -o bin/$*/syncthing.LICENSE "https://raw.githubusercontent.com/syncthing/syncthing/refs/heads/$(SYNCTHING_VERSION)/LICENSE"
+	curl -f -sSL -o bin/$*/syncthing.LICENSE "https://raw.githubusercontent.com/syncthing/syncthing/refs/tags/$(SYNCTHING_VERSION)/LICENSE"
 
 bin/h700/minui-list:
 	mkdir -p bin/h700
