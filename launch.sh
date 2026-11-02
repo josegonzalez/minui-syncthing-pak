@@ -31,6 +31,9 @@ LAUNCHES_SCRIPT="false"
 NETWORK_PORT=8384
 NETWORK_SCHEME="http"
 
+# shellcheck source=bin/syncthing-version.sh
+. "$PAK_DIR/bin/syncthing-version.sh"
+
 show_message() {
     message="$1"
     seconds="$2"
@@ -156,6 +159,11 @@ current_settings() {
         mv "$minui_list_file.tmp" "$minui_list_file"
     fi
 
+    if [ "$(syncthing_selected_version)" = 1 ]; then
+        jq '.settings[2].selected = 1' "$minui_list_file" >"$minui_list_file.tmp"
+        mv "$minui_list_file.tmp" "$minui_list_file"
+    fi
+
     cat "$minui_list_file"
 }
 
@@ -221,6 +229,7 @@ main() {
     fi
 
     chmod +x "$PAK_DIR/bin/$architecture/$SERVICE_NAME"
+    chmod +x "$PAK_DIR/bin/v1/$architecture/$SERVICE_NAME"
     chmod +x "$PAK_DIR/bin/$architecture/jq"
     chmod +x "$PAK_DIR/bin/$PLATFORM/minui-list"
     chmod +x "$PAK_DIR/bin/$PLATFORM/minui-presenter"
@@ -280,6 +289,39 @@ main() {
                 show_message "Waiting for $HUMAN_READABLE_NAME to stop" forever
                 if ! wait_for_service_to_stop 10; then
                     show_message "Failed to stop $HUMAN_READABLE_NAME" 2
+                fi
+                killall minui-presenter >/dev/null 2>&1 || true
+            fi
+        fi
+
+        old_version="$(jq -rM '.settings[2].selected' "/tmp/${PAK_NAME}-old-settings.json")"
+        version="$(jq -rM '.settings[2].selected' "/tmp/${PAK_NAME}-new-settings.json")"
+
+        if [ "$old_version" != "$version" ]; then
+            if [ "$version" = "1" ]; then
+                syncthing_set_version 1
+            else
+                syncthing_set_version 2
+            fi
+
+            # The two store their indexes in different formats, so whichever is
+            # selected now has to build its own. Restart rather than waiting for
+            # the next boot, so the setting matches what is actually running.
+            if service-is-running; then
+                show_message "Switching $HUMAN_READABLE_NAME version" 2
+                if ! service-off; then
+                    show_message "Failed to stop $HUMAN_READABLE_NAME!" 2
+                fi
+                wait_for_service_to_stop 10
+
+                if ! service-on; then
+                    show_message "Failed to enable $HUMAN_READABLE_NAME!" 2
+                    continue
+                fi
+
+                show_message "Waiting for $HUMAN_READABLE_NAME to be running" forever
+                if ! wait_for_service 10; then
+                    show_message "Failed to start $HUMAN_READABLE_NAME" 2
                 fi
                 killall minui-presenter >/dev/null 2>&1 || true
             fi
